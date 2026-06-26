@@ -1,8 +1,11 @@
 # ================================================================
-#  UNIVERSAL PC OPTIMIZER v10.0
+#  UNIVERSAL PC OPTIMIZER v13.0
 #  Works on: Windows 10 / 11 | All laptop/desktop brands
-#  PowerShell 5.1+  |  GUI + Live Command Log  |  No File Deletion
+#  PowerShell 5.1+  |  GUI + Live Command Log
 #  No DISM / No SFC / No Windows Update / No Winget (removed per request)
+#  Includes disk cleanup: Prefetch, Temp, Windows Logs, WU Logs
+#  Includes gaming performance tweaks + rainbow spinner animation
+#  Includes animated startup splash + authentic PowerShell-styled console
 #
 #  HOW TO RUN:
 #    Right-click this file -> "Run with PowerShell"
@@ -69,7 +72,7 @@ $sync = [Hashtable]::Synchronized(@{
     ETA         = "--:--"
     LogLines    = [System.Collections.Generic.List[string]]::new()
     StepsDone   = [bool[]]@($false,$false,$false,$false,$false,$false)
-    StepWeights = [double[]]@(25,30,15,13,8,4)
+    StepWeights = [double[]]@(25,30,15,13,8,16)
     StartTime   = [datetime]::Now
     OSLabel     = $OSLabel
     PCMaker     = $PCMaker
@@ -81,7 +84,7 @@ $sync = [Hashtable]::Synchronized(@{
 <Window
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Universal PC Optimizer v10.0"
+    Title="Universal PC Optimizer v13.0"
     Height="700" Width="980"
     WindowStartupLocation="CenterScreen"
     ResizeMode="CanMinimize"
@@ -245,7 +248,7 @@ $sync = [Hashtable]::Synchronized(@{
             <Border x:Name="Step5" CornerRadius="6" Margin="0,2" Padding="12,8" Background="#080A18">
               <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/><ColumnDefinition Width="62"/></Grid.ColumnDefinitions>
                 <TextBlock x:Name="Icon5" Text="○" Foreground="#243040" FontSize="13" VerticalAlignment="Center"/>
-                <TextBlock x:Name="Lbl5" Grid.Column="1" Text="Startup + DNS + Cleanup" Foreground="#304858" FontSize="11" VerticalAlignment="Center"/>
+                <TextBlock x:Name="Lbl5" Grid.Column="1" Text="Startup, DNS &amp; Disk Cleanup" Foreground="#304858" FontSize="11" VerticalAlignment="Center"/>
                 <TextBlock x:Name="Tag5" Grid.Column="2" Text="PENDING" Foreground="#1E2C3A" FontSize="8" HorizontalAlignment="Right" VerticalAlignment="Center" FontFamily="Segoe UI Mono"/>
               </Grid></Border>
 
@@ -300,29 +303,37 @@ $sync = [Hashtable]::Synchronized(@{
           </StackPanel>
         </ScrollViewer>
 
-        <!-- LIVE COMMAND LOG -->
-        <Border Grid.Row="2" Background="#040810" CornerRadius="7"
-                BorderThickness="1" BorderBrush="#0D1A28" Padding="10,8">
+        <!-- LIVE COMMAND LOG (styled like a real PowerShell console) -->
+        <Border Grid.Row="2" Background="#012456" CornerRadius="7"
+                BorderThickness="1" BorderBrush="#1A3A78" Padding="10,8">
           <Grid>
             <Grid.RowDefinitions>
               <RowDefinition Height="Auto"/>
               <RowDefinition Height="5"/>
               <RowDefinition Height="*"/>
+              <RowDefinition Height="4"/>
+              <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
             <StackPanel Orientation="Horizontal">
-              <TextBlock Text="▶  LIVE COMMAND LOG" FontSize="8" FontWeight="Bold"
-                         Foreground="#1A3050" FontFamily="Segoe UI Mono"/>
+              <TextBlock Text="Windows PowerShell" FontSize="8" FontWeight="Bold"
+                         Foreground="#CFE3FF" FontFamily="Consolas"/>
               <TextBlock x:Name="LogCountText" Text="  (0 commands)"
-                         FontSize="8" Foreground="#101E2A" FontFamily="Segoe UI Mono"/>
+                         FontSize="8" Foreground="#5A7FBF" FontFamily="Consolas"/>
             </StackPanel>
             <ScrollViewer x:Name="LogScroll" Grid.Row="2"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
               <TextBlock x:Name="LogText"
                          FontFamily="Consolas" FontSize="9.5"
-                         Foreground="#1E4060" TextWrapping="Wrap"
+                         Foreground="#E8E8E8" TextWrapping="Wrap"
                          Text="Waiting for optimizer to start..."/>
             </ScrollViewer>
+            <StackPanel Grid.Row="4" Orientation="Horizontal">
+              <TextBlock Text="PS C:\Windows\system32&gt; " FontFamily="Consolas"
+                         FontSize="9.5" Foreground="#3FF3A0"/>
+              <TextBlock x:Name="LogCursor" Text="█" FontFamily="Consolas"
+                         FontSize="9.5" Foreground="#E8E8E8"/>
+            </StackPanel>
           </Grid>
         </Border>
       </Grid>
@@ -351,6 +362,31 @@ $sync = [Hashtable]::Synchronized(@{
         </StackPanel>
       </Grid>
     </Border>
+
+    <!-- STARTUP SPLASH OVERLAY (animated intro, covers all 3 rows) -->
+    <Grid x:Name="SplashOverlay" Grid.RowSpan="3" Background="#06070F" Panel.ZIndex="999">
+      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+        <TextBlock x:Name="SplashIcon" Text="⚙" FontSize="72" Opacity="0"
+                   HorizontalAlignment="Center" Foreground="#00CCFF">
+          <TextBlock.RenderTransform>
+            <ScaleTransform x:Name="SplashIconScale" ScaleX="0.3" ScaleY="0.3" CenterX="36" CenterY="36"/>
+          </TextBlock.RenderTransform>
+          <TextBlock.Effect>
+            <DropShadowEffect Color="#00AAFF" BlurRadius="26" ShadowDepth="0" Opacity="0.9"/>
+          </TextBlock.Effect>
+        </TextBlock>
+        <TextBlock x:Name="SplashTitle" Text="UNIVERSAL PC OPTIMIZER" Opacity="0"
+                   FontSize="26" FontWeight="Bold" Foreground="White" FontFamily="Segoe UI"
+                   HorizontalAlignment="Center" Margin="0,18,0,0"/>
+        <TextBlock x:Name="SplashSubtitle" Text="v13.0" Opacity="0"
+                   FontSize="13" Foreground="#6FA8D8" FontFamily="Segoe UI Mono"
+                   HorizontalAlignment="Center" Margin="0,4,0,0"/>
+        <TextBlock x:Name="SplashCredit" Text="Made by Veer Bhardwaj" Opacity="0"
+                   FontSize="14" FontWeight="Bold" FontFamily="Segoe UI"
+                   HorizontalAlignment="Center" Margin="0,28,0,0"/>
+      </StackPanel>
+    </Grid>
+
   </Grid>
 </Window>
 '@
@@ -362,10 +398,11 @@ $window = [Windows.Markup.XamlReader]::Load($reader)
 $ctrl = @{}
 'TitleMain','TitleSub','ClockText','PctText','StepNumText',
 'PrgContainer','PrgFill','StatusText','EtaLeft',
-'LogText','LogScroll','LogCountText',
+'LogText','LogScroll','LogCountText','LogCursor',
 'FooterText','ElapsedText','EtaFooter',
 'ElapsedFinal','DonePanel','BtnRestart','BtnClose',
-'RingOuter','RingMid','RingInner','RotOuter','RotMid','RotInner' |
+'RingOuter','RingMid','RingInner','RotOuter','RotMid','RotInner',
+'SplashOverlay','SplashIcon','SplashIconScale','SplashTitle','SplashSubtitle','SplashCredit' |
 ForEach-Object { $ctrl[$_] = $window.FindName($_) }
 
 # Step row controls — 6 steps (0..5)
@@ -377,6 +414,7 @@ $sT = 0..5 | ForEach-Object { $window.FindName("Tag$_")  }
 $rotO = [System.Windows.Media.RotateTransform]$ctrl['RotOuter']
 $rotM = [System.Windows.Media.RotateTransform]$ctrl['RotMid']
 $rotI = [System.Windows.Media.RotateTransform]$ctrl['RotInner']
+$splashScale = [System.Windows.Media.ScaleTransform]$ctrl['SplashIconScale']
 
 # ── CACHE BRUSHES ONCE ──────────────────────────────────────────
 $cv = [Windows.Media.BrushConverter]::new()
@@ -385,8 +423,32 @@ $b = @{
     ActBg=$cv.ConvertFrom("#06101E"); ActBor=$cv.ConvertFrom("#005BAA"); ActI=$cv.ConvertFrom("#00CCFF"); ActT=$cv.ConvertFrom("#0088CC")
     DonBg=$cv.ConvertFrom("#050D07"); DonBor=$cv.ConvertFrom("#003D18"); DonI=$cv.ConvertFrom("#00CC55"); DonL=$cv.ConvertFrom("#3A7755"); DonT=$cv.ConvertFrom("#005A22")
     White=[Windows.Media.Brushes]::White; Trans=[Windows.Media.Brushes]::Transparent
+    LogTs=$cv.ConvertFrom("#5A7FBF"); LogPrompt=$cv.ConvertFrom("#3FF3A0"); LogTxt=$cv.ConvertFrom("#E8E8E8")
 }
 $thk0=[Windows.Thickness]::new(0); $thk1=[Windows.Thickness]::new(1)
+
+# ── RAINBOW PALETTE (precomputed once — same cached-brush approach as
+#    above, so the spinner animation never allocates a new brush per frame) ──
+function Convert-HSVtoColor([double]$h,[double]$s,[double]$v){
+    $c=$v*$s
+    $x=$c*(1-[Math]::Abs((($h/60)%2)-1))
+    $m=$v-$c
+    $seg=[Math]::Floor($h/60)%6
+    switch ([int]$seg){
+        0{$r=$c;$g=$x;$bl=0}
+        1{$r=$x;$g=$c;$bl=0}
+        2{$r=0;$g=$c;$bl=$x}
+        3{$r=0;$g=$x;$bl=$c}
+        4{$r=$x;$g=0;$bl=$c}
+        default{$r=$c;$g=0;$bl=$x}
+    }
+    [Windows.Media.Color]::FromRgb([byte](($r+$m)*255),[byte](($g+$m)*255),[byte](($bl+$m)*255))
+}
+$RainbowSteps = 120
+$RainbowBrushes = 0..($RainbowSteps-1) | ForEach-Object {
+    $hue = $_ * (360.0/$RainbowSteps)
+    [Windows.Media.SolidColorBrush]::new((Convert-HSVtoColor $hue 0.85 1.0))
+}
 
 # ── STEP ROW UPDATER (6 steps) ──────────────────────────────────
 function Set-StepUI([int]$i,[int]$st) {
@@ -403,8 +465,9 @@ function Set-StepUI([int]$i,[int]$st) {
     }
 }
 
-# ── TIMER 1: SPINNER 24ms ───────────────────────────────────────
+# ── TIMER 1: SPINNER 24ms — now cycles through a rainbow palette ────
 $script:a1=0.0;$script:a2=0.0;$script:a3=0.0;$script:pulse=0.0
+$script:hueIdx=0
 $tSpin=[System.Windows.Threading.DispatcherTimer]::new()
 $tSpin.Interval=[TimeSpan]::FromMilliseconds(24)
 $tSpin.Add_Tick({
@@ -413,6 +476,22 @@ $tSpin.Add_Tick({
     $script:pulse+=0.065
     $g=$ctrl['PctText'].Effect
     if($g){$g.Opacity=0.5+0.45*[Math]::Sin($script:pulse)}
+
+    # Advance rainbow index; offset each ring so colors flow into each other
+    if(-not $sync.Done){
+        $script:hueIdx = ($script:hueIdx + 1) % $RainbowSteps
+        $i1=$script:hueIdx
+        $i2=($script:hueIdx + 40) % $RainbowSteps
+        $i3=($script:hueIdx + 80) % $RainbowSteps
+        $brush1=$RainbowBrushes[$i1]; $brush2=$RainbowBrushes[$i2]; $brush3=$RainbowBrushes[$i3]
+        $ctrl['RingOuter'].Stroke=$brush1
+        $ctrl['RingMid'].Stroke  =$brush2
+        $ctrl['RingInner'].Stroke=$brush3
+        if($ctrl['RingOuter'].Effect){$ctrl['RingOuter'].Effect.Color=$brush1.Color}
+        if($ctrl['RingInner'].Effect){$ctrl['RingInner'].Effect.Color=$brush3.Color}
+        $ctrl['PctText'].Foreground=$brush3
+        if($g){$g.Color=$brush3.Color}
+    }
 })
 
 # ── TIMER 2: CLOCK+ELAPSED 1s ────────────────────────────────────
@@ -426,6 +505,7 @@ $tClock.Add_Tick({
 
 # ── TIMER 3: PROGRESS+LOG POLL 60ms ──────────────────────────────
 $script:lastStep=-1;$script:smooth=0.0;$script:logCount=0
+$script:blinkTick=0;$script:cursorOn=$true
 
 $tPoll=[System.Windows.Threading.DispatcherTimer]::new()
 $tPoll.Interval=[TimeSpan]::FromMilliseconds(60)
@@ -457,10 +537,28 @@ $tPoll.Add_Tick({
 
     $ll = $sync.LogLines
     if($ll.Count -ne $script:logCount){
-        $ctrl['LogText'].Text = [string]::Join("`n",$ll.ToArray())
+        $tb = $ctrl['LogText']
+        $tb.Inlines.Clear()
+        foreach($line in $ll){
+            if($line -match '^\[(\d{2}:\d{2}:\d{2})\]\s(.*)$'){
+                $ts=$matches[1]; $msg=$matches[2]
+            } else { $ts=""; $msg=$line }
+            $r1=New-Object Windows.Documents.Run("[$ts] ");$r1.Foreground=$b.LogTs
+            $r2=New-Object Windows.Documents.Run("PS> ");$r2.Foreground=$b.LogPrompt;$r2.FontWeight=[Windows.FontWeights]::Bold
+            $r3=New-Object Windows.Documents.Run($msg);$r3.Foreground=$b.LogTxt
+            $tb.Inlines.Add($r1);$tb.Inlines.Add($r2);$tb.Inlines.Add($r3)
+            $tb.Inlines.Add((New-Object Windows.Documents.LineBreak))
+        }
         $ctrl['LogCountText'].Text = "  ($($ll.Count) commands)"
         $ctrl['LogScroll'].ScrollToEnd()
         $script:logCount = $ll.Count
+    }
+
+    # Blinking terminal cursor — toggles every 8 ticks (~480ms at 60ms interval)
+    $script:blinkTick++
+    if(($script:blinkTick % 8) -eq 0){
+        $script:cursorOn = -not $script:cursorOn
+        $ctrl['LogCursor'].Opacity = if($script:cursorOn){1.0}else{0.0}
     }
 
     if($sync.Done){
@@ -482,6 +580,58 @@ $tPoll.Add_Tick({
         $el=[datetime]::Now - $sync.StartTime
         $ctrl['ElapsedFinal'].Text="Completed in {0:D2}:{1:D2}" -f [int]$el.TotalMinutes,$el.Seconds
         $ctrl['DonePanel'].Visibility=[System.Windows.Visibility]::Visible
+    }
+})
+
+# ── TIMER 4: STARTUP SPLASH ANIMATION (runs once before the optimizer
+#    actually starts — icon pop-in, staggered text fade-ins, rainbow
+#    shimmer on the credit line, then fade-out into the real UI) ───────
+$script:introElapsed = 0
+$script:creditHue = 0
+$tIntro = [System.Windows.Threading.DispatcherTimer]::new()
+$tIntro.Interval = [TimeSpan]::FromMilliseconds(30)
+$tIntro.Add_Tick({
+    $script:introElapsed += 30
+    $e = $script:introElapsed
+
+    # Phase 1 (0-500ms): icon pops in — scale 0.3->1.0, fade in
+    if($e -le 500){
+        $t = [Math]::Min(1.0,$e/500.0)
+        $sc = 0.3 + 0.7*$t
+        $splashScale.ScaleX=$sc; $splashScale.ScaleY=$sc
+        $ctrl['SplashIcon'].Opacity=$t
+    }
+    # Phase 2 (400-900ms): title fades in
+    if($e -ge 400){
+        $t = [Math]::Max(0.0,[Math]::Min(1.0,($e-400)/500.0))
+        $ctrl['SplashTitle'].Opacity=$t
+    }
+    # Phase 3 (800-1300ms): subtitle fades in
+    if($e -ge 800){
+        $t = [Math]::Max(0.0,[Math]::Min(1.0,($e-800)/500.0))
+        $ctrl['SplashSubtitle'].Opacity=$t
+    }
+    # Phase 4 (1200ms onward): credit line fades in and shimmers through
+    # the same rainbow palette used by the main spinner
+    if($e -ge 1200){
+        $t = [Math]::Max(0.0,[Math]::Min(1.0,($e-1200)/400.0))
+        $ctrl['SplashCredit'].Opacity=$t
+        $script:creditHue = ($script:creditHue + 2) % $RainbowSteps
+        $ctrl['SplashCredit'].Foreground = $RainbowBrushes[$script:creditHue]
+    }
+    # Phase 5 (2600-3100ms): whole splash fades out
+    if($e -ge 2600){
+        $t = [Math]::Max(0.0,[Math]::Min(1.0, 1.0-(($e-2600)/500.0) ))
+        $ctrl['SplashOverlay'].Opacity=$t
+    }
+    # Splash finished -> hand off to the real optimizer
+    if($e -ge 3100){
+        $tIntro.Stop()
+        $ctrl['SplashOverlay'].Visibility=[System.Windows.Visibility]::Collapsed
+        $sync.StartTime=[datetime]::Now
+        $tSpin.Start();$tClock.Start();$tPoll.Start()
+        [void]$ps.BeginInvoke()
+        $ctrl['FooterText'].Text="Optimization running — do not close this window."
     }
 })
 
@@ -661,8 +811,28 @@ $ps.Runspace=$rs
     & "$env:SystemRoot\System32\bcdedit.exe" /deletevalue useplatformclock 2>&1|Out-Null
     L "bcdedit changes require a restart to take effect"
 
+    # ── GAMING TWEAKS ───────────────────────────────────────────
+    S 1 55 "Applying gaming performance tweaks..."
+    L "--- Gaming Tweaks ---"
+
+    L "REG: PowerThrottlingOff=1 (full CPU for foreground apps/games)"
+    R "HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling" "PowerThrottlingOff" 1
+
+    L "REG: TdrDelay=8 (GPU driver timeout 2s->8s, prevents crash under heavy load)"
+    R "HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" "TdrDelay" 8
+
+    L "REG: Mouse acceleration disabled (consistent aim)"
+    # NOTE: these are REG_SZ ("0"/"1" as text) in Windows, not REG_DWORD —
+    # using String type here so the tweak actually takes effect.
+    R "HKCU:\Control Panel\Mouse" "MouseSpeed"      "0" "String"
+    R "HKCU:\Control Panel\Mouse" "MouseThreshold1" "0" "String"
+    R "HKCU:\Control Panel\Mouse" "MouseThreshold2" "0" "String"
+
+    L "REG: AutoGameModeEnabled=1 (Windows Game Mode prioritizes foreground game)"
+    R "HKCU:\Software\Microsoft\GameBar" "AutoGameModeEnabled" 1
+
     $sync.StepsDone[1]=$true
-    S 1 58 "Performance tweaks done."
+    S 1 58 "Performance + gaming tweaks done."
 
     # ════════════════════════════════════════════════════════════
     # STEP 2 — PRIVACY & TELEMETRY
@@ -800,6 +970,33 @@ $ps.Runspace=$rs
       "Slack","Zoom","WebExMTA","RingCentral") |
     ForEach-Object{DR $rp $_;L "Remove startup: $_"}
 
+    S 5 98 "Cleaning Prefetch, Temp, and Windows Logs..."
+    L "=== Disk Cleanup: Prefetch / Temp / Windows Logs / WU Logs ==="
+    # NOTE: the original path "C:\Users\Renewfy\AppData\Local\Temp" was
+    # hardcoded to one specific Windows account. Replaced with $env:TEMP
+    # so this resolves correctly to whichever account is actually running
+    # the script — required for it to work on any PC / any user, not just
+    # one machine. "Windows Update Logs" = C:\Windows\Logs\WindowsUpdate,
+    # the modern (Win10/11) location for WU trace logs.
+    $cleanupTargets = @(
+        "C:\Windows\Prefetch",
+        $env:TEMP,
+        "C:\Windows\Temp",
+        "C:\Windows\Logs",
+        "C:\Windows\Logs\WindowsUpdate"
+    )
+    foreach($ct in $cleanupTargets){
+        if(Test-Path $ct){
+            $items = Get-ChildItem -Path $ct -Recurse -Force -ErrorAction SilentlyContinue
+            $cnt = ($items | Measure-Object).Count
+            $items | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+            L "Cleaned '$ct' ($cnt items targeted, locked files skipped)"
+        } else {
+            L "Skip '$ct' (path not found on this PC)"
+        }
+    }
+
+    S 5 99 "Flushing DNS cache and resetting network stack..."
     L "Clear-DnsClientCache"
     Clear-DnsClientCache -ErrorAction SilentlyContinue
     L "ipconfig /registerdns"
@@ -822,16 +1019,14 @@ $ps.Runspace=$rs
 
 # ── WINDOW LOADED ────────────────────────────────────────────────
 $window.Add_Loaded({
-    $sync.StartTime=[datetime]::Now
-    $ctrl['TitleSub'].Text="$($sync.OSLabel)  ·  $($sync.PCMaker) $($sync.PCModel)  ·  6 Steps  ·  No Files Deleted"
-    $tSpin.Start();$tClock.Start();$tPoll.Start()
-    [void]$ps.BeginInvoke()
-    $ctrl['FooterText'].Text="Optimization running — do not close this window."
+    $ctrl['TitleSub'].Text="$($sync.OSLabel)  ·  $($sync.PCMaker) $($sync.PCModel)  ·  6 Steps  ·  Includes Disk Cleanup"
+    $ctrl['FooterText'].Text="Starting..."
+    $tIntro.Start()
 })
 
 # ── WINDOW CLOSED ────────────────────────────────────────────────
 $window.Add_Closed({
-    $tSpin.Stop();$tClock.Stop();$tPoll.Stop()
+    $tIntro.Stop();$tSpin.Stop();$tClock.Stop();$tPoll.Stop()
     try{$ps.Stop()}catch{}
     try{$ps.Dispose()}catch{}
     try{$rs.Close()}catch{}
