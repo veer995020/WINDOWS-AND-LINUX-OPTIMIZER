@@ -1,11 +1,13 @@
 # ================================================================
-#  UNIVERSAL PC OPTIMIZER v13.0
+#  UNIVERSAL PC OPTIMIZER v14.0
 #  Works on: Windows 10 / 11 | All laptop/desktop brands
 #  PowerShell 5.1+  |  GUI + Live Command Log
 #  No DISM / No SFC / No Windows Update / No Winget (removed per request)
 #  Includes disk cleanup: Prefetch, Temp, Windows Logs, WU Logs
 #  Includes gaming performance tweaks + rainbow spinner animation
 #  Includes animated startup splash + authentic PowerShell-styled console
+#  Includes security hardening (SMB1 off, Firewall on, PUA Protection)
+#  Includes IPv6 disable + Xbox Gaming Overlay removal
 #
 #  HOW TO RUN:
 #    Right-click this file -> "Run with PowerShell"
@@ -72,7 +74,7 @@ $sync = [Hashtable]::Synchronized(@{
     ETA         = "--:--"
     LogLines    = [System.Collections.Generic.List[string]]::new()
     StepsDone   = [bool[]]@($false,$false,$false,$false,$false,$false)
-    StepWeights = [double[]]@(25,30,15,13,8,16)
+    StepWeights = [double[]]@(25,30,18,13,8,16)
     StartTime   = [datetime]::Now
     OSLabel     = $OSLabel
     PCMaker     = $PCMaker
@@ -84,7 +86,7 @@ $sync = [Hashtable]::Synchronized(@{
 <Window
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Universal PC Optimizer v13.0"
+    Title="Universal PC Optimizer v14.0"
     Height="700" Width="980"
     WindowStartupLocation="CenterScreen"
     ResizeMode="CanMinimize"
@@ -378,7 +380,7 @@ $sync = [Hashtable]::Synchronized(@{
         <TextBlock x:Name="SplashTitle" Text="UNIVERSAL PC OPTIMIZER" Opacity="0"
                    FontSize="26" FontWeight="Bold" Foreground="White" FontFamily="Segoe UI"
                    HorizontalAlignment="Center" Margin="0,18,0,0"/>
-        <TextBlock x:Name="SplashSubtitle" Text="v13.0" Opacity="0"
+        <TextBlock x:Name="SplashSubtitle" Text="v14.0" Opacity="0"
                    FontSize="13" Foreground="#6FA8D8" FontFamily="Segoe UI Mono"
                    HorizontalAlignment="Center" Margin="0,4,0,0"/>
         <TextBlock x:Name="SplashCredit" Text="Made by Veer Bhardwaj" Opacity="0"
@@ -831,6 +833,10 @@ $ps.Runspace=$rs
     L "REG: AutoGameModeEnabled=1 (Windows Game Mode prioritizes foreground game)"
     R "HKCU:\Software\Microsoft\GameBar" "AutoGameModeEnabled" 1
 
+    L "GAMING: Removing Xbox Gaming Overlay app (actual uninstall, not just a disable)"
+    Get-AppxPackage Microsoft.XboxGamingOverlay -ErrorAction SilentlyContinue |
+        Remove-AppxPackage -ErrorAction SilentlyContinue
+
     $sync.StepsDone[1]=$true
     S 1 58 "Performance + gaming tweaks done."
 
@@ -874,6 +880,19 @@ $ps.Runspace=$rs
     R "HKCU:\SOFTWARE\Microsoft\Siuf\Rules" "PeriodInNanoSeconds"  0
     R "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" "GlobalUserDisabled" 1
     R "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" "BackgroundAppGlobalToggle" 0
+
+    # ── SECURITY HARDENING ───────────────────────────────────────
+    S 2 70 "Applying security hardening..."
+    L "--- Security Hardening ---"
+
+    L "SECURITY: Disabling SMB1 protocol (legacy, insecure — WannaCry/EternalBlue vector)"
+    Disable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -NoRestart -ErrorAction SilentlyContinue | Out-Null
+
+    L "SECURITY: Ensuring Windows Firewall is enabled on all profiles"
+    Set-NetFirewallProfile -Profile Domain,Private,Public -Enabled True -ErrorAction SilentlyContinue
+
+    L "SECURITY: Enabling Defender PUA (Potentially Unwanted App) Protection"
+    Set-MpPreference -PUAProtection Enabled -ErrorAction SilentlyContinue
 
     $sync.StepsDone[2]=$true
     S 2 74 "Privacy & telemetry disabled."
@@ -951,6 +970,11 @@ $ps.Runspace=$rs
     if(Test-Path $ti){
         Get-ChildItem $ti -EA SilentlyContinue|ForEach-Object{R $_.PSPath "TcpAckFrequency" 1;R $_.PSPath "TCPNoDelay" 1}
     }
+
+    L "NETWORK: Disabling IPv6 binding on all adapters"
+    L "NOTE: this is a connectivity BEHAVIOR change, not just a perf tweak —"
+    L "skip/revert via Enable-NetAdapterBinding if you rely on IPv6 anywhere"
+    Disable-NetAdapterBinding -Name "*" -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue
 
     $sync.StepsDone[4]=$true
     S 4 96 "Network optimization done."
