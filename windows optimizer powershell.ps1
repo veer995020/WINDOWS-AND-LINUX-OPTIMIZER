@@ -1,5 +1,5 @@
 # ================================================================
-#  UNIVERSAL PC OPTIMIZER v14.0
+#  UNIVERSAL PC OPTIMIZER v15.2
 #  Works on: Windows 10 / 11 | All laptop/desktop brands
 #  PowerShell 5.1+  |  GUI + Live Command Log
 #  No DISM / No SFC / No Windows Update / No Winget (removed per request)
@@ -8,6 +8,10 @@
 #  Includes animated startup splash + authentic PowerShell-styled console
 #  Includes security hardening (SMB1 off, Firewall on, PUA Protection)
 #  Includes IPv6 disable + Xbox Gaming Overlay removal
+#  Includes ~50 additional UI/power-plan/privacy/network tweaks
+#  v15.1: fixed progress bar going backwards between Step 1 and Step 2
+#  v15.2: splash animation overhaul — ease-out-back icon bounce,
+#         ease-out-cubic fades, continuously spinning gear, loading dots
 #
 #  HOW TO RUN:
 #    Right-click this file -> "Run with PowerShell"
@@ -74,7 +78,7 @@ $sync = [Hashtable]::Synchronized(@{
     ETA         = "--:--"
     LogLines    = [System.Collections.Generic.List[string]]::new()
     StepsDone   = [bool[]]@($false,$false,$false,$false,$false,$false)
-    StepWeights = [double[]]@(25,30,18,13,8,16)
+    StepWeights = [double[]]@(25,42,26,13,8,16)
     StartTime   = [datetime]::Now
     OSLabel     = $OSLabel
     PCMaker     = $PCMaker
@@ -86,7 +90,7 @@ $sync = [Hashtable]::Synchronized(@{
 <Window
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Universal PC Optimizer v14.0"
+    Title="Universal PC Optimizer v15.2"
     Height="700" Width="980"
     WindowStartupLocation="CenterScreen"
     ResizeMode="CanMinimize"
@@ -371,7 +375,10 @@ $sync = [Hashtable]::Synchronized(@{
         <TextBlock x:Name="SplashIcon" Text="⚙" FontSize="72" Opacity="0"
                    HorizontalAlignment="Center" Foreground="#00CCFF">
           <TextBlock.RenderTransform>
-            <ScaleTransform x:Name="SplashIconScale" ScaleX="0.3" ScaleY="0.3" CenterX="36" CenterY="36"/>
+            <TransformGroup>
+              <ScaleTransform x:Name="SplashIconScale" ScaleX="0.3" ScaleY="0.3" CenterX="36" CenterY="36"/>
+              <RotateTransform x:Name="SplashIconRotate" Angle="0" CenterX="36" CenterY="36"/>
+            </TransformGroup>
           </TextBlock.RenderTransform>
           <TextBlock.Effect>
             <DropShadowEffect Color="#00AAFF" BlurRadius="26" ShadowDepth="0" Opacity="0.9"/>
@@ -380,12 +387,15 @@ $sync = [Hashtable]::Synchronized(@{
         <TextBlock x:Name="SplashTitle" Text="UNIVERSAL PC OPTIMIZER" Opacity="0"
                    FontSize="26" FontWeight="Bold" Foreground="White" FontFamily="Segoe UI"
                    HorizontalAlignment="Center" Margin="0,18,0,0"/>
-        <TextBlock x:Name="SplashSubtitle" Text="v14.0" Opacity="0"
+        <TextBlock x:Name="SplashSubtitle" Text="v15.2" Opacity="0"
                    FontSize="13" Foreground="#6FA8D8" FontFamily="Segoe UI Mono"
                    HorizontalAlignment="Center" Margin="0,4,0,0"/>
         <TextBlock x:Name="SplashCredit" Text="Made by Veer Bhardwaj" Opacity="0"
                    FontSize="14" FontWeight="Bold" FontFamily="Segoe UI"
                    HorizontalAlignment="Center" Margin="0,28,0,0"/>
+        <TextBlock x:Name="SplashDots" Text="" Opacity="0"
+                   FontSize="13" Foreground="#3A5878" FontFamily="Segoe UI Mono"
+                   HorizontalAlignment="Center" Margin="0,14,0,0"/>
       </StackPanel>
     </Grid>
 
@@ -404,7 +414,7 @@ $ctrl = @{}
 'FooterText','ElapsedText','EtaFooter',
 'ElapsedFinal','DonePanel','BtnRestart','BtnClose',
 'RingOuter','RingMid','RingInner','RotOuter','RotMid','RotInner',
-'SplashOverlay','SplashIcon','SplashIconScale','SplashTitle','SplashSubtitle','SplashCredit' |
+'SplashOverlay','SplashIcon','SplashIconScale','SplashIconRotate','SplashTitle','SplashSubtitle','SplashCredit','SplashDots' |
 ForEach-Object { $ctrl[$_] = $window.FindName($_) }
 
 # Step row controls — 6 steps (0..5)
@@ -417,6 +427,7 @@ $rotO = [System.Windows.Media.RotateTransform]$ctrl['RotOuter']
 $rotM = [System.Windows.Media.RotateTransform]$ctrl['RotMid']
 $rotI = [System.Windows.Media.RotateTransform]$ctrl['RotInner']
 $splashScale = [System.Windows.Media.ScaleTransform]$ctrl['SplashIconScale']
+$splashRotate = [System.Windows.Media.RotateTransform]$ctrl['SplashIconRotate']
 
 # ── CACHE BRUSHES ONCE ──────────────────────────────────────────
 $cv = [Windows.Media.BrushConverter]::new()
@@ -596,38 +607,56 @@ $tIntro.Add_Tick({
     $script:introElapsed += 30
     $e = $script:introElapsed
 
-    # Phase 1 (0-500ms): icon pops in — scale 0.3->1.0, fade in
-    if($e -le 500){
-        $t = [Math]::Min(1.0,$e/500.0)
-        $sc = 0.3 + 0.7*$t
-        $splashScale.ScaleX=$sc; $splashScale.ScaleY=$sc
-        $ctrl['SplashIcon'].Opacity=$t
-    }
-    # Phase 2 (400-900ms): title fades in
+    # Gear keeps spinning continuously for the entire splash duration —
+    # makes a static icon read as "actively loading" rather than a logo
+    $splashRotate.Angle = ($e * 0.18) % 360
+
+    # Phase 1 (0-650ms): icon scales in with an "ease-out-back" overshoot
+    # (scales past 1.0 then settles back — reads as a deliberate bouncy
+    # pop rather than a flat linear grow). Ungated/clamped via Min/Max so
+    # it can never get stuck mid-animation regardless of tick timing.
+    $t1 = [Math]::Max(0.0,[Math]::Min(1.0,$e/650.0))
+    $easeBack = 1 + 2.4*[Math]::Pow($t1-1,3) + 1.4*[Math]::Pow($t1-1,2)
+    $sc = 0.3 + 0.7*$easeBack
+    if($sc -lt 0.05){$sc=0.05}
+    $splashScale.ScaleX=$sc; $splashScale.ScaleY=$sc
+    $ctrl['SplashIcon'].Opacity=[Math]::Min(1.0,$t1*1.6)
+
+    # Phase 2 (400-1000ms): title fades in with ease-out-cubic (fast start,
+    # gentle finish — feels far less mechanical than a linear ramp)
     if($e -ge 400){
-        $t = [Math]::Max(0.0,[Math]::Min(1.0,($e-400)/500.0))
-        $ctrl['SplashTitle'].Opacity=$t
+        $lin = [Math]::Max(0.0,[Math]::Min(1.0,($e-400)/600.0))
+        $ctrl['SplashTitle'].Opacity = 1-[Math]::Pow(1-$lin,3)
     }
-    # Phase 3 (800-1300ms): subtitle fades in
-    if($e -ge 800){
-        $t = [Math]::Max(0.0,[Math]::Min(1.0,($e-800)/500.0))
-        $ctrl['SplashSubtitle'].Opacity=$t
+    # Phase 3 (850-1400ms): subtitle fades in, same easing
+    if($e -ge 850){
+        $lin = [Math]::Max(0.0,[Math]::Min(1.0,($e-850)/550.0))
+        $ctrl['SplashSubtitle'].Opacity = 1-[Math]::Pow(1-$lin,3)
     }
-    # Phase 4 (1200ms onward): credit line fades in and shimmers through
+    # Phase 4 (1300ms onward): credit line fades in and shimmers through
     # the same rainbow palette used by the main spinner
-    if($e -ge 1200){
-        $t = [Math]::Max(0.0,[Math]::Min(1.0,($e-1200)/400.0))
-        $ctrl['SplashCredit'].Opacity=$t
+    if($e -ge 1300){
+        $lin = [Math]::Max(0.0,[Math]::Min(1.0,($e-1300)/450.0))
+        $ctrl['SplashCredit'].Opacity = 1-[Math]::Pow(1-$lin,3)
         $script:creditHue = ($script:creditHue + 2) % $RainbowSteps
         $ctrl['SplashCredit'].Foreground = $RainbowBrushes[$script:creditHue]
     }
-    # Phase 5 (2600-3100ms): whole splash fades out
-    if($e -ge 2600){
-        $t = [Math]::Max(0.0,[Math]::Min(1.0, 1.0-(($e-2600)/500.0) ))
-        $ctrl['SplashOverlay'].Opacity=$t
+    # Phase 4b (1750ms onward): animated loading dots ("." ".." "...")
+    # gives ongoing activity feedback for the rest of the splash, instead
+    # of static text sitting on screen with nothing visibly happening
+    if($e -ge 1750){
+        $dotsT = [Math]::Max(0.0,[Math]::Min(1.0,($e-1750)/350.0))
+        $ctrl['SplashDots'].Opacity = 1-[Math]::Pow(1-$dotsT,3)
+        $dotCount = ([int]($e/350)) % 4
+        $ctrl['SplashDots'].Text = "Loading" + ("." * $dotCount)
+    }
+    # Phase 5 (2750-3300ms): whole splash fades out
+    if($e -ge 2750){
+        $lin = [Math]::Max(0.0,[Math]::Min(1.0, ($e-2750)/550.0 ))
+        $ctrl['SplashOverlay'].Opacity = 1-[Math]::Pow($lin,3)
     }
     # Splash finished -> hand off to the real optimizer
-    if($e -ge 3100){
+    if($e -ge 3300){
         $tIntro.Stop()
         $ctrl['SplashOverlay'].Visibility=[System.Windows.Visibility]::Collapsed
         $sync.StartTime=[datetime]::Now
@@ -837,13 +866,83 @@ $ps.Runspace=$rs
     Get-AppxPackage Microsoft.XboxGamingOverlay -ErrorAction SilentlyContinue |
         Remove-AppxPackage -ErrorAction SilentlyContinue
 
+    # ── UI & RESPONSIVENESS TWEAKS ───────────────────────────────
+    S 1 60 "Applying UI and responsiveness tweaks..."
+    L "--- UI & Responsiveness Tweaks ---"
+
+    L "REG: MenuShowDelay=0, MouseHoverTime=0 (snappier menus/tooltips)"
+    R "HKCU:\Control Panel\Desktop" "MenuShowDelay"  "0" "String"
+    R "HKCU:\Control Panel\Mouse"   "MouseHoverTime" "0" "String"
+
+    L "REG: Taskbar/Start icons trimmed (Widgets, Chat, Meet Now, People)"
+    R "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarDa" 0
+    R "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarMn" 0
+    R "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\People" "PeopleBand" 0
+    R "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "HideSCAMeetNow" 1
+
+    L "REG: File Explorer set to open 'This PC', show file extensions"
+    R "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "LaunchTo" 1
+    R "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "HideFileExt" 0
+
+    L "REG: Quick Access privacy (don't track recent files/frequent folders)"
+    R "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "Start_TrackDocs"  0
+    R "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "ShowRecent"        0
+    R "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "ShowFrequent"       0
+    R "HKCU:\Software\Microsoft\Windows\Policies\Explorer" "NoRecentDocsHistory" 1
+
+    L "REG: Start menu 'recently added apps' and recommendations off"
+    R "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "HideRecentlyAddedApps" 1
+    R "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "Start_IrisRecommendations" 0
+    R "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "Start_NotifyNewApps" 0
+
+    L "REG: Taskbar search box reduced to icon (less visual overhead)"
+    R "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" "SearchboxTaskbarMode" 1
+
+    L "REG: Balloon tip notifications off, icon cache size raised to 4096"
+    R "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "EnableBalloonTips" 0
+    R "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer" "Max Cached Icons" "4096" "String"
+
+    L "REG: Suppress Sticky/Toggle/Filter Keys activation popups (accessibility"
+    L "shortcut nag dialogs — doesn't disable the features, just the popup)"
+    R "HKCU:\Control Panel\Accessibility\StickyKeys"       "Flags" "506" "String"
+    R "HKCU:\Control Panel\Accessibility\ToggleKeys"       "Flags" "58"  "String"
+    R "HKCU:\Control Panel\Accessibility\Keyboard Response" "Flags" "122" "String"
+
+    # ── POWER PLAN FINE-TUNING (AC power only — battery-mode behavior
+    #    on laptops is left untouched on purpose) ────────────────────
+    S 1 65 "Fine-tuning power plan (AC power only)..."
+    L "--- Power Plan Fine-Tuning (AC only, battery mode untouched) ---"
+
+    L "powercfg: CPU minimum state 100% on AC (trades heat/battery for"
+    L "consistent performance — does NOT apply on battery)"
+    & "$env:SystemRoot\System32\powercfg.exe" /setacvalueindex SCHEME_CURRENT `
+        54533251-82be-4824-96c1-47b60b740d00 893dee8e-2bef-41e0-89c6-b8d7b8d29fb1 100 2>&1|Out-Null
+
+    L "powercfg: Processor performance boost mode = Aggressive (AC only)"
+    & "$env:SystemRoot\System32\powercfg.exe" /setacvalueindex SCHEME_CURRENT `
+        54533251-82be-4824-96c1-47b60b740d00 be337238-0d82-4146-a960-4f3749d470c7 2 2>&1|Out-Null
+
+    L "powercfg: USB selective suspend disabled (AC only, fixes peripheral lag)"
+    & "$env:SystemRoot\System32\powercfg.exe" /setacvalueindex SCHEME_CURRENT `
+        2a737441-1930-4402-8d77-b2bebba308a3 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0 2>&1|Out-Null
+
+    L "powercfg: PCIe Link State Power Management = Off (AC only)"
+    & "$env:SystemRoot\System32\powercfg.exe" /setacvalueindex SCHEME_CURRENT `
+        501a4d13-42af-4429-9fd1-a8218c268e20 ee12f906-d277-404b-b6da-e5fa1a576df5 0 2>&1|Out-Null
+
+    & "$env:SystemRoot\System32\powercfg.exe" /setactive SCHEME_CURRENT 2>&1|Out-Null
+    L "powercfg /setactive SCHEME_CURRENT (apply fine-tuned values)"
+
+    L "Disable-NetAdapterPowerManagement (prevents NIC sleep causing drops/latency)"
+    Disable-NetAdapterPowerManagement -Name "*" -ErrorAction SilentlyContinue
+
     $sync.StepsDone[1]=$true
-    S 1 58 "Performance + gaming tweaks done."
+    S 1 68 "Performance + gaming tweaks done."
 
     # ════════════════════════════════════════════════════════════
     # STEP 2 — PRIVACY & TELEMETRY
     # ════════════════════════════════════════════════════════════
-    S 2 60 "Disabling telemetry services (safe timeout)..."
+    S 2 69 "Disabling telemetry services (safe timeout)..."
     L "=== STEP 3/6: Privacy & Telemetry ==="
 
     # DiagTrack disabled via the safe KS() wrapper below — NOT a bare
@@ -882,7 +981,7 @@ $ps.Runspace=$rs
     R "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search" "BackgroundAppGlobalToggle" 0
 
     # ── SECURITY HARDENING ───────────────────────────────────────
-    S 2 70 "Applying security hardening..."
+    S 2 72 "Applying security hardening..."
     L "--- Security Hardening ---"
 
     L "SECURITY: Disabling SMB1 protocol (legacy, insecure — WannaCry/EternalBlue vector)"
@@ -894,8 +993,38 @@ $ps.Runspace=$rs
     L "SECURITY: Enabling Defender PUA (Potentially Unwanted App) Protection"
     Set-MpPreference -PUAProtection Enabled -ErrorAction SilentlyContinue
 
+    L "SECURITY: AutoRun/AutoPlay disabled for removable media (common malware vector)"
+    R "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" "NoDriveTypeAutoRun" 255
+
+    L "REG: Consumer Features disabled (no more suggested/auto-installed Store apps)"
+    R "HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent" "DisableWindowsConsumerFeatures" 1
+
+    L "REG: No auto-resume-and-signin after update reboot (privacy/security)"
+    R "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" "DisableAutomaticRestartSignOn" 1
+
+    L "REG: Lock screen / Start menu suggestion content disabled"
+    RB "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" @{
+        "RotatingLockScreenOverlayEnabled" = 0
+        "SubscribedContent-338387Enabled"  = 0
+        "SubscribedContent-353698Enabled"  = 0
+        "SubscribedContent-353694Enabled"  = 0
+        "SilentInstalledAppsEnabled"       = 0
+    }
+
+    L "schtasks: Disable telemetry-adjacent compatibility-data tasks"
+    & "$env:SystemRoot\System32\schtasks.exe" /Change /TN `
+        "\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser" `
+        /Disable 2>&1|Out-Null
+    & "$env:SystemRoot\System32\schtasks.exe" /Change /TN `
+        "\Microsoft\Windows\Application Experience\ProgramDataUpdater" `
+        /Disable 2>&1|Out-Null
+
+    L "REG: Delivery Optimization P2P sharing disabled (HTTP-only updates,"
+    L "your bandwidth no longer shared with other PCs on the internet)"
+    R "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization" "DODownloadMode" 0
+
     $sync.StepsDone[2]=$true
-    S 2 74 "Privacy & telemetry disabled."
+    S 2 76 "Privacy & telemetry disabled."
 
     # ════════════════════════════════════════════════════════════
     # STEP 3 — MEMORY & CPU
@@ -910,6 +1039,9 @@ $ps.Runspace=$rs
 
     L "REG: Memory Compression disabled (Compression=0)"
     R "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" "Compression" 0
+
+    L "REG: EnableSuperfetch=0 (complements the already-disabled SysMain service)"
+    R "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" "EnableSuperfetch" 0
 
     L "REG: Multimedia timer 1ms + network throttle off"
     R "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" "SystemResponsiveness" 0
@@ -965,6 +1097,10 @@ $ps.Runspace=$rs
     L "REG: EnableAutoDoh=2 (DNS-over-HTTPS)"
     R "HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" "EnableAutoDoh" 2
 
+    L "REG: DNS cache TTL tuning (cap valid entries at 24h, don't cache failures)"
+    R "HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" "MaxCacheEntryTtlLimit" 86400
+    R "HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" "NegativeCacheTime" 0
+
     L "REG: Nagle disabled (TcpAckFrequency=1 TCPNoDelay=1)"
     $ti="HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces"
     if(Test-Path $ti){
@@ -991,7 +1127,8 @@ $ps.Runspace=$rs
       "CCleaner","Dropbox","Box","Grammarly",
       "HPMessageService","HPMSGSVC","McAfeeUpdaterUI",
       "LenovoUtility","ASUSGiftBox","AcerCare","SnagIt",
-      "Slack","Zoom","WebExMTA","RingCentral") |
+      "Slack","Zoom","WebExMTA","RingCentral",
+      "iTunesHelper","QuickTime Task","Adobe ARM","CCXProcess") |
     ForEach-Object{DR $rp $_;L "Remove startup: $_"}
 
     S 5 98 "Cleaning Prefetch, Temp, and Windows Logs..."
